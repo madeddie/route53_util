@@ -5,6 +5,12 @@
 # route53_util.sh lookup appdev.io venus.appdev.io
 # route53_util.sh <create|upsert|delete> appdev.io venus.appdev.io venus-green.appdev.io CNAME 60 "just because"
 #
+
+if [ "$1" = "-v" ]; then
+  VERBOSE=true
+  shift
+fi
+
 if [ "$1" = "lookup" ]; then
   shift
   if [ $# -lt 2 ]; then echo 'Not enough arguments to do lookup'; exit 2; fi
@@ -12,12 +18,16 @@ if [ "$1" = "lookup" ]; then
   ZONE_NAME=$1
   RECORD=$2
   ESCAPED_RECORD=$(echo $2 | sed 's/\*/\\052/')
+  if [ "$VERBOSE" = "true" ]; then
+    VERBOSE_OUTPUT="[].Name, [].TTL, 'IN', [].Type, "
+  fi
+  OUTPUT_FILTER="| [${VERBOSE_OUTPUT}[?AliasTarget].AliasTarget.DNSName, [?ResourceRecords].ResourceRecords[0].Value][]"
   ZONE_ID=$(aws --output text route53 list-hosted-zones --query "HostedZones[?Name=='${ZONE_NAME}.'][Id]")
   output=$(aws --output text route53 list-resource-record-sets \
     --hosted-zone-id=$ZONE_ID \
     --start-record-name $ESCAPED_RECORD \
     --max-items=1 \
-    --query "ResourceRecordSets[?Name=='${ESCAPED_RECORD}.'][ResourceRecords[0].Value]")
+    --query "ResourceRecordSets[?Name=='${ESCAPED_RECORD}.']${OUTPUT_FILTER}")
 
   if [ ! "$output" ]; then 
     echo "Record not found"
@@ -26,7 +36,7 @@ if [ "$1" = "lookup" ]; then
   fi
 
 
-elif [ "$1" = "create" -o "$1" == "upsert" -o "$1" == "delete" ]; then
+elif [ "$1" = "create" -o "$1" = "upsert" -o "$1" = "delete" ]; then
   ACTION=$(echo $1 | tr '[:lower:]' '[:upper:]')
   shift
   if [ $# -lt 3 ]; then echo 'Not enough arguments'; exit 2; fi
