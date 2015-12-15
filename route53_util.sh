@@ -17,15 +17,15 @@ if [ "$1" = "lookup" ]; then
   
   ZONE_NAME=$1
   RECORD=$2
-  ESCAPED_RECORD=$(echo $2 | sed 's/\*/\\052/')
+  ESCAPED_RECORD=${2//\*/\052}
   if [ "$VERBOSE" = "true" ]; then
     VERBOSE_OUTPUT="[].Name, [].TTL, 'IN', [].Type, "
   fi
   OUTPUT_FILTER="| [${VERBOSE_OUTPUT}[?AliasTarget].AliasTarget.DNSName, [?ResourceRecords].ResourceRecords[0].Value][]"
   ZONE_ID=$(aws --output text route53 list-hosted-zones --query "HostedZones[?Name=='${ZONE_NAME}.'][Id]")
   output=$(aws --output text route53 list-resource-record-sets \
-    --hosted-zone-id=$ZONE_ID \
-    --start-record-name $ESCAPED_RECORD \
+    --hosted-zone-id="$ZONE_ID" \
+    --start-record-name "$ESCAPED_RECORD" \
     --max-items=1 \
     --query "ResourceRecordSets[?Name=='${ESCAPED_RECORD}.']${OUTPUT_FILTER}")
 
@@ -36,8 +36,8 @@ if [ "$1" = "lookup" ]; then
   fi
 
 
-elif [ "$1" = "create" -o "$1" = "upsert" -o "$1" = "delete" ]; then
-  ACTION=$(echo $1 | tr '[:lower:]' '[:upper:]')
+elif [ "$1" = "create" ] || [ "$1" = "upsert" ] || [ "$1" = "delete" ]; then
+  ACTION=$(echo "$1" | tr '[:lower:]' '[:upper:]')
   shift
   if [ $# -lt 3 ]; then echo 'Not enough arguments'; exit 2; fi
 
@@ -50,7 +50,7 @@ elif [ "$1" = "create" -o "$1" = "upsert" -o "$1" = "delete" ]; then
   
   TMPFILE=$(mktemp /tmp/temporary-file.XXXXXXXX)
   ZONE_ID=$(aws --output text route53 list-hosted-zones --query "HostedZones[?Name=='${ZONE_NAME}.'][Id]")
-  cat > ${TMPFILE} << EOF 
+  cat > "$TMPFILE" << EOF 
 { 
   "Comment": "${COMMENT}", 
   "Changes": [ 
@@ -72,7 +72,7 @@ elif [ "$1" = "create" -o "$1" = "upsert" -o "$1" = "delete" ]; then
 EOF
   
   aws route53 change-resource-record-sets \
-    --hosted-zone-id=${ZONE_ID} \
+    --hosted-zone-id="$ZONE_ID" \
     --change-batch file://"${TMPFILE}"
   
   rm "${TMPFILE}"
